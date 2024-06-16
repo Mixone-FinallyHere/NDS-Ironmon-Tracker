@@ -36,6 +36,9 @@ local function TextField(initialText, initialTextOffset, initialTextStyle, isJus
         textStyle.setShadowColorKey(newShadowColorKey)
     end
     function self.show()
+        if text == "" then
+            return
+        end
         local shadowColorKey = textStyle.getShadowColorKey()
         local shadowColor = DrawingUtils.calcShadowColor(shadowColorKey)
         local newPosition = {
@@ -44,6 +47,11 @@ local function TextField(initialText, initialTextOffset, initialTextStyle, isJus
         }
         DrawingUtils.drawText(newPosition.x, newPosition.y, text, textStyle, shadowColor, justifiable, justifiedSpacing)
     end
+
+    function self.setUseStrikethrough(newValue)
+        textStyle.setUseStrikethrough(newValue)
+    end
+
     return self
 end
 

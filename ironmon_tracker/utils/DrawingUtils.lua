@@ -15,8 +15,12 @@ local TextStyle = dofile(UIClassFolder .. "TextStyle.lua")
 local Layout = dofile(UIClassFolder .. "Layout.lua")
 local ImageField = dofile(UIClassFolder .. "/ImageField.lua")
 
+-- Use this to prevent image files from being drawn onto the Tracker; helps solves caching issues and image locks
+DrawingUtils.canDrawImages = true
+
 function DrawingUtils.initialize(initialSettings)
     settings = initialSettings
+    DrawingUtils.canDrawImages = true
 end
 
 function DrawingUtils.setTransparentBackgroundOverride(newValue)
@@ -63,9 +67,18 @@ function DrawingUtils.calculateWordPixelLength(text)
     return totalLength
 end
 
-function DrawingUtils.drawBox(x, y, width, height, fill, background, shadowed, shadowColor)
+function DrawingUtils.drawBox(x, y, width, height, fill, background, shadowed, shadowColor, opacity)
     if shadowed and settings.colorSettings["Draw shadows"] and not settings.colorSettings["Transparent backgrounds"] then
         gui.drawRectangle(x, y, width + 2, height + 2, 0x00000000, shadowColor)
+    end
+    local opacityStr = string.format("%X", opacity or 0xFF)
+    if fill ~= nil and opacity ~= 0xFF then
+        local fillStr = string.format("%X", fill)
+        fill = tonumber(opacityStr .. fillStr:sub(3), 16)
+    end
+    if background ~= nil and opacity ~= 0xFF then
+        local backgroundStr = string.format("%X", background)
+        background = tonumber(opacityStr .. backgroundStr:sub(3), 16)
     end
     gui.drawRectangle(x, y, width, height, fill, background)
 end
@@ -233,6 +246,9 @@ function DrawingUtils.drawVerticalBarGraph(
     end
 end
 
+local function drawStrikethrough()
+end
+
 function DrawingUtils.drawText(x, y, text, textStyle, shadowColor, justifiable, justifiedSpacing)
     local drawShadow = settings.colorSettings["Draw shadows"] and not settings.colorSettings["Transparent backgrounds"]
     local color = DrawingUtils.convertColorKeyToColor(textStyle.getTextColorKey())
@@ -247,7 +263,7 @@ function DrawingUtils.drawText(x, y, text, textStyle, shadowColor, justifiable, 
             elseif justifiedSpacing == 2 then
                 spacing = 3
             end
-        elseif text == "WT" then
+        elseif text == "WT" or text == "HP" then
             spacing = 3
         elseif text == "ITM" then
             spacing = 2
@@ -261,25 +277,52 @@ function DrawingUtils.drawText(x, y, text, textStyle, shadowColor, justifiable, 
     if drawShadow then
         gui.drawText(x + spacing + 1, y + 1, text, shadowColor, nil, textStyle.getFontSize(), textStyle.getFontFamily())
     end
+    if textStyle.isStrikethrough() then
+        local moveWidth = DrawingUtils.calculateWordPixelLength(text)
+        local opacity = settings.colorScheme["Negative text color"] - 0x80000000
+        gui.drawLine(x + 1, y + 6, x + moveWidth + 2, y + 6, opacity)
+        color = settings.colorScheme["Negative text color"]
+    end
     local bolded = textStyle.isBolded()
     gui.drawText(x + spacing, y, text, color, nil, textStyle.getFontSize(), textStyle.getFontFamily(), bolded)
 end
 
-function DrawingUtils.readPokemonIDIntoImageLabel(currentIconSet, pokemonID, imageLabel, imageOffset)
+local function getPokemonPath(pokemonID, currentIconSet)
+    local pokemonData = PokemonData.POKEMON[pokemonID + 1]
+    local pokemonIDPath = tostring(pokemonID)
     local folderPath = Paths.FOLDERS.POKEMON_ICONS_FOLDER .. "/" .. currentIconSet.FOLDER_NAME .. "/"
     local extension = currentIconSet.FILE_EXTENSION
-    imageLabel.setOffset(currentIconSet.IMAGE_OFFSET)
-    local pokemonData = PokemonData.POKEMON[pokemonID + 1]
-    if not pokemonData.baseFormData then
-        imageLabel.setPath(folderPath .. pokemonID .. extension)
-    else
+    local usingAnimated = settings.appearance.ICON_SET_INDEX == 5
+    if usingAnimated then
+        pokemonIDPath = string.format("%03d", pokemonID)
+    end
+    if pokemonData.baseFormData then
         local baseFormData = pokemonData.baseFormData
         if PokemonData.ALTERNATE_FORMS[baseFormData.baseFormName] then
             local index = baseFormData.alternateFormIndex
-            local path = folderPath .. "alternateForms/" .. baseFormData.baseFormName .. "/" .. index .. extension
-            imageLabel.setPath(path)
+            pokemonIDPath = "alternateForms/" .. baseFormData.baseFormName .. "/" .. index
+            if usingAnimated then
+                pokemonIDPath = baseFormData.baseFormIndex .. "_" .. index
+            end
+            if not FormsUtils.fileExists(folderPath .. pokemonIDPath .. extension) then
+                pokemonID = baseFormData.baseFormIndex
+                pokemonIDPath = string.format("%03d", pokemonID)
+            end
         end
     end
+    return folderPath .. pokemonIDPath .. extension
+end
+
+function DrawingUtils.readPokemonIDIntoImageLabel(currentIconSet, pokemonID, imageLabel, shouldChangeDirection)
+    imageLabel.setOffset(currentIconSet.IMAGE_OFFSET)
+    local path = getPokemonPath(pokemonID, currentIconSet)
+    imageLabel.setPath(path)
+    local usingAnimated = settings.appearance.ICON_SET_INDEX == 5
+    if not usingAnimated then
+        imageLabel.setImageRegionOffset({x = 0, y = -0})
+        imageLabel.setOffset(currentIconSet.IMAGE_OFFSET)
+    end
+    AnimatedSpriteManager.addPokemonImage(imageLabel, pokemonID, usingAnimated, shouldChangeDirection)
 end
 
 function DrawingUtils.convertColorKeyToColor(colorKey, transparentOverride)
@@ -288,12 +331,8 @@ function DrawingUtils.convertColorKeyToColor(colorKey, transparentOverride)
         ["Top box background color"] = true,
         ["Bottom box background color"] = true
     }
-    if settings.colorSettings["Transparent backgrounds"] and transparentKeys[colorKey] and not transparentOverride then
-        if blackInsteadOfTransparent then
-            return 0xFF000000
-        else
-            return 0x00000000
-        end
+    if settings.colorSettings["Transparent backgrounds"] and transparentKeys[colorKey] then
+        return 0xFF000000
     end
     if not settings.colorScheme[colorKey] and colorKey == "Alternate positive text color" then
         colorKey = "Positive text color"
@@ -309,6 +348,9 @@ function DrawingUtils.convertColorKeyToColor(colorKey, transparentOverride)
 end
 
 function DrawingUtils.calcShadowColor(colorKey, veryDark, colorCode)
+    if colorKey == nil then
+        return 0x00000000
+    end
     local color = colorCode
     if color == nil then
         color = settings.colorScheme[colorKey]
@@ -408,7 +450,12 @@ function DrawingUtils.drawMoveEffectiveness(position, effectiveness)
                 x,
                 y,
                 "X",
-                TextStyle(7, Graphics.FONT.DEFAULT_FONT_FAMILY, "Alternate negative text color", "Bottom box background color"),
+                TextStyle(
+                    7,
+                    Graphics.FONT.DEFAULT_FONT_FAMILY,
+                    "Alternate negative text color",
+                    "Bottom box background color"
+                ),
                 DrawingUtils.convertColorKeyToColor("Bottom box background color")
             )
         end
@@ -496,8 +543,7 @@ function DrawingUtils.drawExtraMainScreenStuff(extraThingsToDraw)
             extraThingsToDraw.experienceBar.y,
             extraThingsToDraw.experienceBar.percent
         DrawingUtils.drawExperienceBar(x, y, percent)
-    end
-    if extraThingsToDraw.friendshipBar ~= nil then
+    elseif extraThingsToDraw.friendshipBar ~= nil then
         local x, y, progress =
             extraThingsToDraw.friendshipBar.x,
             extraThingsToDraw.friendshipBar.y,

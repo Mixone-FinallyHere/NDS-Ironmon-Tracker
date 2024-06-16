@@ -14,6 +14,7 @@ function GameSettings.setAsHeartGoldSoulSilver()
 	GameSettings.statStagesEnemy = 0x2C6174
 end
 --]]
+--TO-DO: add gen 4 repel steps addresses and also test B/W
 MemoryAddresses = {}
 
 MemoryAddresses.NDS_CONSTANTS = {
@@ -41,7 +42,12 @@ MemoryAddresses[GameInfo.VERSION_NUMBER.HEART_GOLD] = {
         berryBagStartBattle = 0x46B78,
         johtoBadges = 0x8E,
         kantoBadges = 0x93,
-        leagueBeaten = 0x1000
+        leagueBeaten = 0x1000,
+        facingDirection = 0x25DA8,
+        repelSteps = 0x6919,
+        battleSubscriptMsgs = 0x47184,
+        abilityMessage = 0x471C8,
+        dayOfWeek = 0xDF4
     },
     GLOBAL = {
         battleStatus = 0x246F48
@@ -69,7 +75,11 @@ MemoryAddresses[GameInfo.VERSION_NUMBER.SOUL_SILVER] = {
         berryBagStartBattle = 0x46B78,
         johtoBadges = 0x8E,
         kantoBadges = 0x93,
-        leagueBeaten = 0x1000
+        leagueBeaten = 0x1000,
+        facingDirection = 0x25DA8,
+        repelSteps = 0x6919,
+        battleSubscriptMsgs = 0x47184,
+        dayOfWeek = 0xDF4
     },
     GLOBAL = {
         battleStatus = 0x246F48
@@ -95,7 +105,10 @@ MemoryAddresses[GameInfo.VERSION_NUMBER.PLATINUM] = {
         enemyPokemonID = 0x47678,
         berryBagStart = 0xC00,
         berryBagStartBattle = 0x4435C,
-        badges = 0x96
+        badges = 0x96,
+        facingDirection = 0x238A4,
+        repelSteps = 0x8087,
+        battleSubscriptMsgs = 0x44928
     },
     GLOBAL = {
         battleStatus = 0x24A55A
@@ -121,7 +134,10 @@ MemoryAddresses[GameInfo.VERSION_NUMBER.DIAMOND] = {
         enemyPokemonID = 0x48640,
         berryBagStart = 0xDF4,
         berryBagStartBattle = 0x4550C,
-        badges = 0x292
+        badges = 0x292,
+        repelSteps = 0x764C,
+        facingDirection = 0x24A5C,
+        battleSubscriptMsgs = 0x458F0
     },
     GLOBAL = {
         battleStatus = 0x23BB38
@@ -147,7 +163,10 @@ MemoryAddresses[GameInfo.VERSION_NUMBER.PEARL] = {
         enemyPokemonID = 0x48640,
         berryBagStart = 0xDF4,
         berryBagStartBattle = 0x4550C,
-        badges = 0x292
+        badges = 0x292,
+        repelSteps = 0x764C,
+        facingDirection = 0x24A5C,
+        battleSubscriptMsgs = 0x458F0
     },
     GLOBAL = {
         battleStatus = 0x23BB38
@@ -176,7 +195,13 @@ MemoryAddresses[GameInfo.VERSION_NUMBER.BLACK] = {
         totalMonsParty = 0x2349B0,
         berryBagStart = 0x234844,
         berryBagStartBattle = 0x234844,
-        badges = 0x23CDB0
+        badges = 0x23CDB0,
+        repelSteps = 0x23D6DD,
+        facingDirection = 0x2521FC,
+        mapNPCIDStart = 0x2521EC,
+        abilityTriggerStart = 0x2A6354,
+        mainBattleDataPtr = 0x269838,
+        doubleTripleFlag = 0x2A62F8
     }
 }
 
@@ -202,7 +227,13 @@ MemoryAddresses[GameInfo.VERSION_NUMBER.WHITE] = {
         totalMonsParty = 0x2349B0 + 0x20,
         berryBagStart = 0x234844 + 0x20,
         berryBagStartBattle = 0x234844 + 0x20,
-        badges = 0x23CDB0 + 0x20
+        badges = 0x23CDB0 + 0x20,
+        repelSteps = 0x23D6DD + 0x20,
+        facingDirection = 0x2521FC + 0x20,
+        mapNPCIDStart = 0x2521EC + 0x20,
+        abilityTriggerStart = 0x2A6354 + 0x20,
+        mainBattleDataPtr = 0x269838 + 0x20,
+        doubleTripleFlag = 0x2A62F8 + 0x20
     }
 }
 
@@ -227,7 +258,13 @@ MemoryAddresses[GameInfo.VERSION_NUMBER.BLACK2] = {
         totalMonsParty = 0x21E428,
         berryBagStart = 0x21E2BC,
         berryBagStartBattle = 0x21E2BC,
-        badges = 0x226728
+        badges = 0x226728,
+        repelSteps = 0x226F51,
+        facingDirection = 0x23D9FC,
+        mapNPCIDStart = 0x23D9EC,
+        abilityTriggerStart = 0x294E08,
+        mainBattleDataPtr = 0x2573AC,
+        doubleTripleFlag = 0x294DA4
     }
 }
 
@@ -252,7 +289,13 @@ MemoryAddresses[GameInfo.VERSION_NUMBER.WHITE2] = {
         totalMonsParty = 0x21E428 + 0x80,
         berryBagStart = 0x21E2BC + 0x80,
         berryBagStartBattle = 0x21E2BC + 0x80,
-        badges = 0x226728 + 0x80
+        badges = 0x226728 + 0x80,
+        repelSteps = 0x226F51 + 0x80,
+        facingDirection = 0x23D9FC + 0x80,
+        mapNPCIDStart = 0x23D9EC + 0x80,
+        abilityTriggerStart = 0x294E08 + 0x80,
+        mainBattleDataPtr = 0x2573AC + 0x80,
+        doubleTripleFlag = 0x294DA4 + 0x80
     }
 }
 

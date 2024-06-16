@@ -3,6 +3,7 @@ local function Tracker()
 
 	local currentAreaName = ""
 	local trackedData = {
+		currentTimerSeconds = 0,
 		encounterData = {},
 		runOver = false,
 		progress = PlaythroughConstants.PROGRESS.NOWHERE,
@@ -17,6 +18,17 @@ local function Tracker()
 	local sessionStartTime = os.time()
 	local startSeconds = 0
 	local totalSeconds = 0
+
+	function self.setTimerSeconds(newSeconds)
+		trackedData.currentTimerSeconds = newSeconds
+	end
+
+	function self.getTimerSeconds()
+		if not trackedData.currentTimerSeconds or trackedData.currentTimerSeconds == nil then
+			return 0
+		end
+		return trackedData.currentTimerSeconds
+	end
 
 	function self.setRunOver()
 		trackedData.runOver = true
@@ -68,10 +80,10 @@ local function Tracker()
 
 	function self.loadTotalPlaytime(gameName)
 		local playtimeFile = "savedData/" .. gameName .. ".pt"
-		local seconds = MiscUtils.readStringFromFile(playtimeFile)
-		if seconds ~= nil then
+		local seconds = tonumber(MiscUtils.readStringFromFile(playtimeFile) or "", 10)
+		if type(seconds) == "number" then
 			totalSeconds = seconds
-			startSeconds = tonumber(seconds, 10)
+			startSeconds = seconds
 		end
 	end
 
@@ -82,8 +94,23 @@ local function Tracker()
 
 	function self.updatePlaytime(gameName)
 		local playtimeFile = "savedData/" .. gameName .. ".pt"
-		totalSeconds = startSeconds + (os.time() - sessionStartTime)
+		local additionalTime = math.max(os.time() - sessionStartTime, 0)
+		totalSeconds = startSeconds + additionalTime
 		MiscUtils.writeStringToFile(playtimeFile, tostring(totalSeconds))
+	end
+
+	function self.loadExternalTrackerDataFile(filePath)
+		local trackerData = MiscUtils.getTableFromFile(filePath)
+		if trackerData == nil then
+			return
+		end
+		for key, value in pairs(trackedData) do
+			if not trackerData[key] then
+				trackerData[key] = value
+			end
+		end
+		trackerData["romHash"] = trackedData["romHash"]
+		trackedData = trackerData
 	end
 
 	function self.loadData(gameName)
@@ -257,6 +284,9 @@ local function Tracker()
 			if data.currentLevel == "---" then
 				template.level = data.lastLevelSeen
 			end
+			if template.level == "---" then
+				template.level = 0
+			end
 			template.pokemonID = id
 			if data.baseForm ~= nil then
 				template.baseForm = {
@@ -316,14 +346,9 @@ local function Tracker()
 	end
 
 	function self.trackAbility(pokemonID, abilityID)
-		local currentAbilities = trackedData.abilities[pokemonID]
-		if currentAbilities == nil then
-			trackedData.abilities[pokemonID] = {}
-			trackedData.abilities[pokemonID][abilityID] = abilityID
-		else
-			if currentAbilities[abilityID] == nil then
-				trackedData.abilities[pokemonID][abilityID] = abilityID
-			end
+		checkIfPokemonUntracked(pokemonID)
+		if abilityID then
+			trackedData.trackedPokemon[pokemonID].abilities[abilityID] = true
 		end
 	end
 
@@ -417,6 +442,38 @@ local function Tracker()
 		end
 	end
 
+	function self.trackAbilityNote(pokemonID, abilityId)
+		checkIfPokemonUntracked(pokemonID)
+		-- Only add a note if this ability hasn't been tracked yet (player might purposefully remove the note)
+		local trackedAbilities = self.getAbilities(pokemonID)
+		if trackedAbilities[abilityId or -1] then
+			return false
+		end
+
+		self.trackAbility(pokemonID, abilityId)
+
+		local abilityName
+		if abilityId and AbilityData.ABILITIES[abilityId + 1] then
+			abilityName = AbilityData.ABILITIES[abilityId + 1].name
+		end
+		-- Append the ability name to the note for this pokemon
+		if pokemonID and abilityName then
+			--  But only if that note wasn't already included
+			local note = self.getNote(pokemonID) or ""
+			local noteAlreadyTaken = string.find(note:lower(), abilityName:lower(), 1, true)
+			if not noteAlreadyTaken then
+				if #note > 0 then
+					note = string.format("%s, %s", note, abilityName)
+				else
+					note = abilityName
+				end
+				self.setNote(pokemonID, note)
+			end
+		end
+
+		return true
+	end
+
 	function self.getMoves(pokemonID)
 		checkIfPokemonUntracked(pokemonID)
 		if next(trackedData.trackedPokemon[pokemonID].moves) == nil then
@@ -435,13 +492,7 @@ local function Tracker()
 
 	function self.getAbilities(pokemonID)
 		checkIfPokemonUntracked(pokemonID)
-		if trackedData.abilities[pokemonID] == nil then
-			return {
-				1
-			}
-		else
-			return trackedData.abilities[pokemonID]
-		end
+		return trackedData.trackedPokemon[pokemonID].abilities
 	end
 
 	function self.getStatPredictions(pokemonID)

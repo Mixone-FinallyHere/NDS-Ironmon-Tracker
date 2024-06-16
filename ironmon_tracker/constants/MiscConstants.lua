@@ -1,12 +1,11 @@
 MiscConstants = {}
 
-MiscConstants.TRACKER_VERSION = "5.5.5"
+MiscConstants.TRACKER_VERSION = "6.2.6"
 
 MiscConstants.BIZHAWK_VERSION = client.getversion()
 
 MiscConstants.UPDATE_NOTES = {
-    "-- Fixed extra lines showing when viewing trainer Pok" .. Chars.accentedE .. "mon in the log viewer.",
-    "-- Gen 5 games will now display all 3 abilities that a Pok" .. Chars.accentedE .. "mon can have."
+    "-- Minor bug fixes."
 }
 
 MiscConstants.DEFAULT_SETTINGS = {
@@ -17,15 +16,24 @@ MiscConstants.DEFAULT_SETTINGS = {
         SHOW_ACCURACY_AND_EVASION = true,
         RANDOM_BALL_PICKER = true,
         SHOW_POKECENTER_HEALS = false,
+        SHOW_NICKNAME = false,
         ICON_SET_INDEX = 2,
-        BLIND_MODE = false
+        BLIND_MODE = false,
+        REPEL_ICON = false,
+        BAG_HEALS_SHOW_HP_INSTEAD = false
+    },
+    animatedSprites = {
+        FASTER_ANIMATIONS = false,
+        CHANGE_DIRECTION = false
     },
     controls = {
         CHANGE_VIEW = "Start",
         LOAD_NEXT_SEED = "A B Start Select",
         CYCLE_STAT = "L",
         CYCLE_PREDICTION = "R",
-        LOCK_ENEMY = "Select"
+        LOCK_ENEMY = "Select",
+        LEFT_EFFECTIVENESS = "L",
+        RIGHT_EFFECTIVENESS = "R"
     },
     battle = {
         AUTO_SWAP_TO_ENEMY = false,
@@ -33,7 +41,8 @@ MiscConstants.DEFAULT_SETTINGS = {
         SHOW_MOVE_EFFECTIVENESS = true,
         SHOW_ACTUAL_ENEMY_PP = true,
         SHOW_1ST_FIGHT_STATS_PLATINUM = true,
-        ENABLE_ENEMY_LOCKING = false
+        ENABLE_ENEMY_LOCKING = false,
+        DOUBLES_MODE = false
     },
     colorScheme = {
         ["Main background color"] = 4278190080,
@@ -79,7 +88,8 @@ MiscConstants.DEFAULT_SETTINGS = {
         UPDATE_WAS_DONE = true
     },
     trackedInfo = {
-        FAINT_DETECTION = PlaythroughConstants.FAINT_DETECTIONS.ON_FIRST_SLOT_FAINT
+        FAINT_DETECTION = PlaythroughConstants.FAINT_DETECTIONS.ON_FIRST_SLOT_FAINT,
+        FIRST_TIME_BW2 = true
     },
     extras = {
         BROWS_ENABLED = false,
@@ -87,6 +97,15 @@ MiscConstants.DEFAULT_SETTINGS = {
     },
     tourneyTracker = {
         ENABLED = false
+    },
+    coverageCalc = {
+        FULLY_EVOLVED_ONLY = false
+    },
+    timer = {
+        ENABLED = false,
+        TRANSPARENT = false,
+        XPOS = 0,
+        YPOS = 180.5
     }
 }
 
@@ -119,6 +138,14 @@ MiscConstants.DEFAULT_POKEMON = {
         SPE = "---",
         SPA = "---",
         SPD = "---"
+    },
+    EVs = {
+        HP = 0,
+        ATK = 0,
+        DEF = 0,
+        SPE = 0,
+        SPA = 0,
+        SPD = 0
     },
     isEgg = 0,
     nature = 0,

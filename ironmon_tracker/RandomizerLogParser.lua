@@ -4,13 +4,15 @@ local function LogInfo(
     initialTMs,
     initialStarterNumber,
     initialMiscInfo,
-    initialStarters)
+    initialStarters,
+    initialPivotData)
     local self = {}
     local pokemonList = initialPokemonList
     local trainers = initialTrainers
     local TMs = initialTMs
     local starters = initialStarters
     local miscInfo = initialMiscInfo
+    local pivotData = initialPivotData
     local starterNumber = 1
 
     function self.setStarterNumberFromPlayerPokemonID(id)
@@ -43,11 +45,39 @@ local function LogInfo(
         return miscInfo
     end
 
+    function self.getPivotData()
+        return pivotData
+    end
+
     return self
 end
 
 local function RandomizerLogParser(initialProgram)
-    local self = {}
+    local self = {
+        ENCOUNTER_TYPE_TO_PERCENTS = {
+            ["Old Rod"] = {60, 30, 5, 4, 1},
+            ["Headbutt"] = {50, 15, 15, 10, 5, 5},
+            ["Bug Catching"] = {20, 20, 10, 10, 10, 10, 5, 5, 5, 5}
+        },
+        ROUTE_NAME_TO_CORRECT_SET = {
+            ["Lake Verity"] = {
+                ["Grass/Cave"] = "345"
+            },
+            ["Route 204"] = {
+                ["Grass/Cave"] = "383"
+            },
+            ["Ruins of Alph"] = {
+                ["Grass/Cave"] = "68"
+            },
+            ["Dark Cave"] = {
+                ["Grass/Cave"] = "365"
+            }
+        },
+        DUPLICATE_ROUTE_TO_NEW_PIVOT_TYPE = {
+            ["142"] = "Ext. Grass",
+            ["148"] = "Int. Grass"
+        }
+    }
 
     local moveIDMappings = {}
     local pokemonIDMappings = {}
@@ -59,6 +89,7 @@ local function RandomizerLogParser(initialProgram)
     local trainers = {}
     local TMs = {}
     local starters = {}
+    local pivotData = {}
     local totalLines
 
     local function parseRandomizedEvolutions(lines, lineStart)
@@ -92,6 +123,7 @@ local function RandomizerLogParser(initialProgram)
         local heldItem = nil
         if nameItemSplit[2] ~= nil then
             local heldItemName = nameItemSplit[2]
+            heldItemName = heldItemName:gsub("’", "'")
             if itemIDMappings[heldItemName] then
                 heldItem = itemIDMappings[heldItemName]
             end
@@ -224,9 +256,7 @@ local function RandomizerLogParser(initialProgram)
                 local abilityNames = {pokemonData[10], pokemonData[11], pokemonData[12]}
                 pokemon.abilities = {}
                 for _, abilityName in pairs(abilityNames) do
-                    if abilityIDMappings[abilityName] ~= nil and abilityName ~= "--" then
-                        table.insert(pokemon.abilities, abilityIDMappings[abilityName])
-                    end
+                    table.insert(pokemon.abilities, abilityIDMappings[abilityName] or 0)
                 end
             end
             currentLineIndex = currentLineIndex + 1
@@ -266,6 +296,160 @@ local function RandomizerLogParser(initialProgram)
         end
     end
 
+    local function readStandardEncounter(lines, line, startIndex, data)
+        local slotPercents = {20, 20, 10, 10, 10, 10, 5, 5, 4, 4, 1, 1}
+        local pokemonName, level = lines[line]:match("(.*) Lv(%d+)")
+        level = tonumber(level)
+        pokemonName = pokemonName:lower()
+        local id = pokemonIDMappings[pokemonName]
+        local percent = slotPercents[line - startIndex + 1]
+        local entry = data[id]
+        if data[id] == nil then
+            data[id] = {minLevel = level, maxLevel = level, ["percent"] = percent}
+        else
+            data[id] = {
+                minLevel = math.min(entry.minLevel, level),
+                maxLevel = math.max(entry.maxLevel, level),
+                ["percent"] = entry.percent + percent
+            }
+        end
+    end
+
+    local function readNonstandardEncounter(lines, line, startIndex, data, encounterType)
+        local slotPercents = self.ENCOUNTER_TYPE_TO_PERCENTS[encounterType]
+        local pokemonName, ignore, minLevel, maxLevel = lines[line]:match("(.*) Lv(.-)(%d+)%-?(%d+)")
+        if maxLevel == nil then
+            maxLevel = minLevel
+        end
+        minLevel = tonumber(minLevel)
+        maxLevel = tonumber(maxLevel)
+        pokemonName = pokemonName:lower()
+        local id = pokemonIDMappings[pokemonName]
+        local percent = slotPercents[line - startIndex + 1]
+        if percent == nil then
+            return
+        end
+        local entry = data[id]
+        if entry == nil then
+            data[id] = {["minLevel"] = minLevel, ["maxLevel"] = maxLevel, ["percent"] = percent}
+        else
+            entry.minLevel = math.min(entry.minLevel, minLevel)
+            entry.maxLevel = math.max(entry.maxLevel, maxLevel)
+            entry.percent = entry.percent + percent
+        end
+    end
+
+    local function readEncounters(lines, lineStart, pivotType)
+        local data = {}
+        local currentLineIndex = lineStart
+        local startIndex = lineStart
+        while (lines[currentLineIndex] ~= nil and lines[currentLineIndex] ~= "") do
+            if pivotType == "Old Rod" or pivotType == "Headbutt" then
+                readNonstandardEncounter(lines, currentLineIndex, startIndex, data, pivotType)
+            else
+                readStandardEncounter(lines, currentLineIndex, startIndex, data)
+            end
+            currentLineIndex = currentLineIndex + 1
+        end
+        return data
+    end
+
+    local function readBugCatchingEntry(lines, line, pivotData)
+        local routeInfo = lines[line]
+        --ignore pre nat dex, patch makes it post nat dex
+        if lines[line]:find("Pre-National") then
+            return
+        end
+        local days = {
+            "Tuesday",
+            "Thursday",
+            "Saturday"
+        }
+        if not pivotData["Bug Catching"] then
+            pivotData["Bug Catching"] = {}
+        end
+        line = line + 1
+        local startIndex = line
+        for _, day in pairs(days) do
+            if routeInfo:find(day) then
+                local data = {}
+                while (lines[line] ~= nil and lines[line] ~= "") do
+                    readNonstandardEncounter(lines, line, startIndex, data, "Bug Catching")
+                    line = line + 1
+                end
+                pivotData["Bug Catching"][day] = data
+            end
+        end
+    end
+
+    --returns true if the route is valid, i.e. not an unwanted duplicate
+    local function checkRouteDuplicate(areaName, setNumber, pivotType)
+        if not self.ROUTE_NAME_TO_CORRECT_SET[areaName] then
+            return true
+        end
+        local encounterToCorrectSet = self.ROUTE_NAME_TO_CORRECT_SET[areaName]
+        if not encounterToCorrectSet[pivotType] then
+            return true
+        end
+        return encounterToCorrectSet[pivotType] == setNumber
+    end
+
+    local function formatPivotType(areaName, setNumber, pivotType)
+        if self.DUPLICATE_ROUTE_TO_NEW_PIVOT_TYPE[setNumber] then
+            return self.DUPLICATE_ROUTE_TO_NEW_PIVOT_TYPE[setNumber]
+        end
+        pivotType = pivotType:gsub("Doubles Grass", "Dark Grass")
+        if not areaName:find("Cave") then
+            return pivotType:gsub("/Cave", "")
+        else
+            return pivotType:gsub("Grass/", "")
+        end
+    end
+
+    local function parseRouteData(lines, lineStart)
+        local validRoutes = program.getGameInfo().LOCATION_DATA.encounterAreaOrder
+        local timesSeenSprout = 0
+        local pivotTypes = program.getGameInfo().PIVOT_TYPES
+        local currentLineIndex = lineStart
+        while (lines[currentLineIndex] ~= nil and lines[currentLineIndex]:sub(1, 2) ~= "--" and
+            currentLineIndex <= totalLines) do
+            local routeInfo = lines[currentLineIndex]
+            for pivotType, _ in pairs(pivotTypes) do
+                if routeInfo:find(pivotType) then
+                    if pivotType == "Bug Catching" then
+                        readBugCatchingEntry(lines, currentLineIndex, pivotData)
+                    else
+                        local number, areaName = routeInfo:match("Set #(%d+) %- (.+) " .. pivotType)
+                        --very dumb but idk what else to do
+                        if areaName == "Sprout Tower" then
+                            timesSeenSprout = timesSeenSprout + 1
+                            areaName = areaName .. " " .. timesSeenSprout .. "F"
+                        end
+                        local valid = checkRouteDuplicate(areaName, number, pivotType)
+                        pivotType = formatPivotType(areaName, number, pivotType)
+                        if MiscUtils.tableContains(validRoutes, areaName) and valid then
+                            if not pivotData[areaName] then
+                                pivotData[areaName] = {}
+                            end
+                            if pivotType ~= "Headbutt" then
+                                pivotData[areaName][pivotType] = readEncounters(lines, currentLineIndex + 1, pivotType)
+                            else
+                                local suffixes = {"(C)", "(R)"}
+                                for index, suffix in pairs(suffixes) do
+                                    local lineOffset = (index - 1) * 6
+                                    pivotData[areaName]["Headbutt" .. suffix] =
+                                        readEncounters(lines, currentLineIndex + 1 + lineOffset, pivotType)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            currentLineIndex = currentLineIndex + 1
+        end
+        return pivotData
+    end
+
     self.LogParserConstants = {
         SECTION_HEADER_TO_PARSE_FUNCTION = {
             ["--Pokemon Base Stats & Types--"] = parsePokemon,
@@ -277,7 +461,8 @@ local function RandomizerLogParser(initialProgram)
             ["--Move Data--"] = parseMoveInfo,
             ["------------------------------------------------------------------"] = checkGameName,
             ["--Random Starters--"] = parseStarterInfo,
-            ["--Custom Starters--"] = parseStarterInfo
+            ["--Custom Starters--"] = parseStarterInfo,
+            ["--Wild Pokemon--"] = parseRouteData
         },
         PREFERRED_PARSE_ORDER = {
             --game name
@@ -286,6 +471,7 @@ local function RandomizerLogParser(initialProgram)
             "--Pokemon Base Stats & Types--",
             "--Pokemon Movesets--",
             "--Randomized Evolutions--",
+            "--Wild Pokemon--",
             "--TM Moves--",
             "--TM Compatibility--",
             "--Trainers Pokemon--",
@@ -318,6 +504,7 @@ local function RandomizerLogParser(initialProgram)
             resetPokemon()
             trainers = {}
             TMs = {}
+            pivotData = {}
             local lines = MiscUtils.readLinesFromFile(inputFile, true)
             totalLines = #lines
             local sectionHeaderStarts = {}
@@ -350,7 +537,7 @@ local function RandomizerLogParser(initialProgram)
                 end
             end
             local miscInfo = parseMiscInfo(lines)
-            return LogInfo(pokemonList, trainers, TMs, 1, miscInfo, starters)
+            return LogInfo(pokemonList, trainers, TMs, 1, miscInfo, starters, pivotData)
         end
     end
 
